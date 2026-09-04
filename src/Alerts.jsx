@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import RiskMap from "./RiskMap";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://geoguard-ai-backend.onrender.com";
 
 const locations = {
   Guwahati: {

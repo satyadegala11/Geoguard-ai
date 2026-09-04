@@ -26,7 +26,7 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://geoguard-ai-backend.onrender.com";
 
 // =========================================================
 // INDIA BOUNDARY
