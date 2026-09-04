@@ -9,10 +9,14 @@ import httpx
 
 
 # =========================================================
-# APP
+# APP CONFIGURATION
 # =========================================================
 
-app = FastAPI(title="GeoGuard AI")
+app = FastAPI(
+    title="GeoGuard AI",
+    description="AI-Based Early Warning & Landslide Risk Monitoring System",
+    version="1.0.0"
+)
 
 
 # =========================================================
@@ -29,7 +33,7 @@ app.add_middleware(
 
 
 # =========================================================
-# LOAD ML MODEL
+# MACHINE LEARNING MODEL
 # =========================================================
 
 MODEL_PATH = os.path.join(
@@ -39,11 +43,16 @@ MODEL_PATH = os.path.join(
     "landslide_model.pkl"
 )
 
-model = joblib.load(MODEL_PATH)
+try:
+    model = joblib.load(MODEL_PATH)
+    print("ML model loaded successfully.")
+except Exception as exc:
+    print("ERROR loading ML model:", exc)
+    raise
 
 
 # =========================================================
-# INPUT MODELS
+# DATA MODELS
 # =========================================================
 
 class LandslideData(BaseModel):
@@ -65,12 +74,14 @@ class MapLocation(BaseModel):
 @app.get("/")
 def home():
     return {
-        "message": "GeoGuard AI Landslide Prediction API is running!"
+        "message": "GeoGuard AI Landslide Prediction API is running!",
+        "status": "online",
+        "version": "1.0.0"
     }
 
 
 # =========================================================
-# NORMAL AI PREDICTION
+# NORMAL LANDSLIDE PREDICTION
 # =========================================================
 
 @app.post("/predict")
@@ -83,19 +94,17 @@ def predict(data: LandslideData):
         data.elevation
     ]]
 
-    prediction = int(
-        model.predict(input_data)[0]
-    )
+    # ML prediction
+    prediction = int(model.predict(input_data)[0])
 
-    probabilities = model.predict_proba(
-        input_data
-    )[0]
+    # Probability
+    probabilities = model.predict_proba(input_data)[0]
 
     classes = list(model.classes_)
 
+    # Class 2 = High landslide class, if available
     if 2 in classes:
         high_index = classes.index(2)
-
         landslide_probability = float(
             probabilities[high_index]
         )
@@ -109,10 +118,13 @@ def predict(data: LandslideData):
         2
     )
 
+    # Risk classification
     if risk_percentage >= 70:
         risk = "High"
+
     elif risk_percentage >= 40:
         risk = "Medium"
+
     else:
         risk = "Low"
 
@@ -132,21 +144,7 @@ def predict(data: LandslideData):
 
 
 # =========================================================
-# AI LANDSLIDE LOCATION PREDICTION
-# =========================================================
-#
-# Gets live environmental information based on
-# the selected latitude and longitude.
-#
-# Weather / soil moisture:
-# Open-Meteo
-#
-# Elevation:
-# Open-Meteo elevation API
-#
-# Slope:
-# Prototype terrain estimate for now.
-#
+# LIVE LOCATION-BASED PREDICTION
 # =========================================================
 
 @app.post("/predict-location")
@@ -156,7 +154,7 @@ async def predict_location(data: MapLocation):
     longitude = data.longitude
 
     # -----------------------------------------------------
-    # INDIA BOUNDING BOX VALIDATION
+    # INDIA VALIDATION
     # -----------------------------------------------------
 
     if latitude < 6 or latitude > 38:
@@ -172,79 +170,140 @@ async def predict_location(data: MapLocation):
         )
 
     # -----------------------------------------------------
-    # FETCH LIVE WEATHER DATA
+    # OPEN-METEO WEATHER API
     # -----------------------------------------------------
 
-    weather_url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={latitude}"
-        f"&longitude={longitude}"
-        "&current="
-        "temperature_2m,"
-        "relative_humidity_2m,"
-        "rain,"
-        "precipitation,"
-        "wind_speed_10m,"
-        "soil_moisture_0_to_1cm"
-        "&timezone=auto"
-    )
+    weather_url = "https://api.open-meteo.com/v1/forecast"
+
+    weather_params = {
+        "latitude": latitude,
+        "longitude": longitude,
+
+        "current": (
+            "temperature_2m,"
+            "relative_humidity_2m,"
+            "rain,"
+            "wind_speed_10m,"
+            "soil_moisture_0_to_1cm"
+        ),
+
+        "timezone": "auto"
+    }
 
     # -----------------------------------------------------
-    # FETCH ELEVATION
+    # OPEN-METEO ELEVATION API
     # -----------------------------------------------------
 
-    elevation_url = (
-        "https://api.open-meteo.com/v1/elevation"
-        f"?latitude={latitude}"
-        f"&longitude={longitude}"
-    )
+    elevation_url = "https://api.open-meteo.com/v1/elevation"
+
+    elevation_params = {
+        "latitude": latitude,
+        "longitude": longitude
+    }
+
+    # -----------------------------------------------------
+    # GET LIVE ENVIRONMENTAL DATA
+    # -----------------------------------------------------
 
     try:
 
         async with httpx.AsyncClient(
-            timeout=15.0
+            timeout=30.0,
+            follow_redirects=True
         ) as client:
 
             weather_response = await client.get(
-                weather_url
+                weather_url,
+                params=weather_params
             )
 
             elevation_response = await client.get(
-                elevation_url
+                elevation_url,
+                params=elevation_params
             )
 
-        # Check weather response
+        # -------------------------------------------------
+        # WEATHER ERROR
+        # -------------------------------------------------
+
         if weather_response.status_code != 200:
-            raise HTTPException(
-                status_code=502,
-                detail="Unable to retrieve live weather data."
+
+            print(
+                "OPEN-METEO WEATHER ERROR:",
+                weather_response.status_code,
+                weather_response.text
             )
 
-        # Check elevation response
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Unable to retrieve live weather data. "
+                    f"Open-Meteo returned "
+                    f"{weather_response.status_code}."
+                )
+            )
+
+        # -------------------------------------------------
+        # ELEVATION ERROR
+        # -------------------------------------------------
+
         if elevation_response.status_code != 200:
-            raise HTTPException(
-                status_code=502,
-                detail="Unable to retrieve elevation data."
+
+            print(
+                "OPEN-METEO ELEVATION ERROR:",
+                elevation_response.status_code,
+                elevation_response.text
             )
 
-        weather_data = (
-            weather_response.json()
-        )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Unable to retrieve elevation data. "
+                    f"Open-Meteo returned "
+                    f"{elevation_response.status_code}."
+                )
+            )
 
-        elevation_data = (
-            elevation_response.json()
-        )
+        # -------------------------------------------------
+        # CONVERT RESPONSE TO JSON
+        # -------------------------------------------------
+
+        try:
+            weather_data = weather_response.json()
+            elevation_data = elevation_response.json()
+
+        except Exception as exc:
+
+            print(
+                "JSON PARSING ERROR:",
+                str(exc)
+            )
+
+            raise HTTPException(
+                status_code=502,
+                detail="Environmental data service returned invalid data."
+            )
+
+    # -----------------------------------------------------
+    # NETWORK ERROR
+    # -----------------------------------------------------
 
     except httpx.RequestError as exc:
 
-        raise HTTPException(
-            status_code=502,
-            detail=f"Environmental data service unavailable: {str(exc)}"
+        print(
+            "OPEN-METEO REQUEST ERROR:",
+            str(exc)
         )
 
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Environmental data service unavailable."
+            )
+        )
 
     # =====================================================
-    # EXTRACT WEATHER VALUES
+    # EXTRACT WEATHER DATA
     # =====================================================
 
     current = weather_data.get(
@@ -280,12 +339,7 @@ async def predict_location(data: MapLocation):
         )
     )
 
-    # Open-Meteo soil moisture is returned
-    # as m³/m³.
-    #
-    # Example:
-    # 0.35 = 35%
-
+    # Soil moisture is returned as m³/m³
     soil_moisture_raw = float(
         current.get(
             "soil_moisture_0_to_1cm",
@@ -293,20 +347,18 @@ async def predict_location(data: MapLocation):
         )
     )
 
+    # Convert to percentage
     soil_moisture = (
         soil_moisture_raw * 100
     )
 
-
     # =====================================================
-    # ELEVATION
+    # EXTRACT ELEVATION
     # =====================================================
 
-    elevation_values = (
-        elevation_data.get(
-            "elevation",
-            [0]
-        )
+    elevation_values = elevation_data.get(
+        "elevation",
+        []
     )
 
     if elevation_values:
@@ -319,18 +371,16 @@ async def predict_location(data: MapLocation):
 
         elevation = 0.0
 
-
     # =====================================================
     # SLOPE
     # =====================================================
     #
     # IMPORTANT:
-    # This is currently an estimated terrain value.
+    # This is a prototype estimate.
+    # It is NOT measured terrain slope.
     #
-    # It is NOT presented as measured slope.
-    #
-    # We can later replace this with DEM-based
-    # terrain slope calculation.
+    # For a production disaster-management system,
+    # replace this with DEM/GIS-derived slope.
     #
     # =====================================================
 
@@ -339,9 +389,8 @@ async def predict_location(data: MapLocation):
         longitude
     )
 
-
     # =====================================================
-    # AI MODEL INPUT
+    # MACHINE LEARNING INPUT
     # =====================================================
 
     input_data = [[
@@ -350,6 +399,10 @@ async def predict_location(data: MapLocation):
         slope,
         elevation
     ]]
+
+    # =====================================================
+    # ML PREDICTION
+    # =====================================================
 
     prediction = int(
         model.predict(input_data)[0]
@@ -362,7 +415,6 @@ async def predict_location(data: MapLocation):
     classes = list(
         model.classes_
     )
-
 
     # =====================================================
     # LANDSLIDE PROBABILITY
@@ -382,12 +434,14 @@ async def predict_location(data: MapLocation):
             max(probabilities)
         )
 
+    # =====================================================
+    # RISK PERCENTAGE
+    # =====================================================
 
     risk_percentage = round(
         landslide_probability * 100,
         2
     )
-
 
     # =====================================================
     # RISK LEVEL
@@ -405,16 +459,21 @@ async def predict_location(data: MapLocation):
 
         risk = "Low"
 
-
     # =====================================================
-    # RESPONSE
+    # FINAL RESPONSE
     # =====================================================
 
     return {
 
-        "latitude": latitude,
+        "latitude": round(
+            latitude,
+            6
+        ),
 
-        "longitude": longitude,
+        "longitude": round(
+            longitude,
+            6
+        ),
 
         "risk_level": risk,
 
@@ -465,32 +524,32 @@ async def predict_location(data: MapLocation):
 
 
 # =========================================================
-# SLOPE ESTIMATION
+# PROTOTYPE SLOPE ESTIMATION
 # =========================================================
 
-def estimate_slope(latitude, longitude):
+def estimate_slope(
+    latitude: float,
+    longitude: float
+):
 
-    # Temporary prototype estimate.
-    #
-    # DO NOT describe this as measured slope.
-    #
-    # This will be replaced later with
-    # DEM-based slope calculation.
-
+    # Northern Himalayan region
     if latitude >= 27:
         return 25.0
 
+    # North-East / Himalayan foothills
     if latitude >= 24:
         return 20.0
 
+    # Central / Western regions
     if latitude >= 20:
         return 15.0
 
+    # Southern / lower latitude regions
     return 8.0
 
 
 # =========================================================
-# RISK DATA
+# RISK DATA ENDPOINT
 # =========================================================
 
 @app.get("/risk-data")
@@ -502,7 +561,7 @@ def get_risk_data():
 
 
 # =========================================================
-# LANDSLIDE REPORT SYSTEM
+# CITIZEN REPORTING
 # =========================================================
 
 REPORTS_FILE = os.path.join(
@@ -510,6 +569,10 @@ REPORTS_FILE = os.path.join(
     "reports.json"
 )
 
+
+# =========================================================
+# LOAD REPORTS
+# =========================================================
 
 def load_reports():
 
@@ -533,7 +596,13 @@ def load_reports():
         return []
 
 
-def save_reports(reports):
+# =========================================================
+# SAVE REPORTS
+# =========================================================
+
+def save_reports(
+    reports
+):
 
     with open(
         REPORTS_FILE,
@@ -549,21 +618,30 @@ def save_reports(reports):
 
 
 # =========================================================
-# CREATE REPORT
+# CREATE CITIZEN REPORT
 # =========================================================
 
 @app.post("/reports")
 async def create_report(
+
     location: str = Form(...),
+
     description: str = Form(...),
+
     file: UploadFile | None = File(None)
+
 ):
 
     reports = load_reports()
 
+    # Generate report ID
     report_id = len(reports) + 1
 
     file_name = None
+
+    # -----------------------------------------------------
+    # SAVE UPLOADED FILE
+    # -----------------------------------------------------
 
     if file is not None:
 
@@ -578,8 +656,8 @@ async def create_report(
         )
 
         original_name = (
-            file.filename or
-            "uploaded_file"
+            file.filename
+            or "uploaded_file"
         )
 
         file_name = (
@@ -602,6 +680,9 @@ async def create_report(
                 contents
             )
 
+    # -----------------------------------------------------
+    # CREATE REPORT OBJECT
+    # -----------------------------------------------------
 
     report = {
 
@@ -616,11 +697,16 @@ async def create_report(
         "status": "Submitted",
 
         "time": datetime.now().isoformat()
+
     }
 
-    reports.append(report)
+    reports.append(
+        report
+    )
 
-    save_reports(reports)
+    save_reports(
+        reports
+    )
 
     return {
 
@@ -632,7 +718,7 @@ async def create_report(
 
 
 # =========================================================
-# GET REPORTS
+# GET ALL REPORTS
 # =========================================================
 
 @app.get("/reports")
@@ -645,4 +731,5 @@ def get_reports():
         "count": len(reports),
 
         "reports": reports
+
     }
