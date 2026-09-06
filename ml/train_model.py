@@ -1,10 +1,15 @@
-
 import pandas as pd
 import numpy as np
+
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report
+)
+
 import joblib
+
 
 # =========================================================
 # GEOGUARD AI - LANDSLIDE ML MODEL
@@ -14,74 +19,110 @@ print("===================================")
 print("GeoGuard AI ML Training")
 print("===================================")
 
-# ---------------------------------------------------------
-# Create training dataset
-#
-# 0 = Low
-# 1 = Medium
-# 2 = High
-#
-# This is a prototype/synthetic dataset.
-# Real deployment should use validated historical
-# landslide and environmental observations.
-# ---------------------------------------------------------
+
+# =========================================================
+# CREATE SYNTHETIC DATASET
+# =========================================================
 
 np.random.seed(42)
 
 rows = []
 
+
 for i in range(1500):
 
-    rainfall = np.random.uniform(0, 250)
-    soil_moisture = np.random.uniform(10, 90)
-    slope = np.random.uniform(0, 45)
-    elevation = np.random.uniform(0, 3000)
+    rainfall = np.random.uniform(
+        0,
+        250
+    )
 
-    # -----------------------------------------------------
-    # Prototype risk score
-    # -----------------------------------------------------
+    soil_moisture = np.random.uniform(
+        10,
+        90
+    )
+
+    slope = np.random.uniform(
+        0,
+        45
+    )
+
+    elevation = np.random.uniform(
+        0,
+        3000
+    )
+
+
+    # =====================================================
+    # RISK SCORE
+    # =====================================================
 
     score = 0
 
-    # Rainfall contribution
+
+    # Rainfall
     if rainfall >= 120:
+
         score += 3
+
     elif rainfall >= 60:
+
         score += 2
+
     elif rainfall >= 20:
+
         score += 1
 
-    # Soil moisture contribution
+
+    # Soil moisture
     if soil_moisture >= 70:
+
         score += 3
+
     elif soil_moisture >= 45:
+
         score += 2
+
     elif soil_moisture >= 30:
+
         score += 1
 
-    # Slope contribution
+
+    # Slope
     if slope >= 30:
+
         score += 3
+
     elif slope >= 20:
+
         score += 2
+
     elif slope >= 10:
+
         score += 1
 
-    # Elevation contribution
-    # Elevation alone should not determine landslide risk.
+
+    # Elevation
     if elevation >= 2000:
+
         score += 1
 
-    # -----------------------------------------------------
-    # Convert score to risk class
-    # -----------------------------------------------------
+
+    # =====================================================
+    # RISK CLASS
+    # =====================================================
 
     if score <= 3:
-        risk = 0       # Low
+
+        risk = 0
+
     elif score <= 6:
-        risk = 1       # Medium
+
+        risk = 1
+
     else:
-        risk = 2       # High
+
+        risk = 2
+
 
     rows.append([
         rainfall,
@@ -92,9 +133,9 @@ for i in range(1500):
     ])
 
 
-# ---------------------------------------------------------
-# Create DataFrame
-# ---------------------------------------------------------
+# =========================================================
+# DATAFRAME
+# =========================================================
 
 df = pd.DataFrame(
     rows,
@@ -107,16 +148,26 @@ df = pd.DataFrame(
     ]
 )
 
-print("Dataset created successfully!")
-print("Number of rows:", len(df))
-print()
-print("Risk distribution:")
-print(df["landslide"].value_counts().sort_index())
+
+print(
+    "Dataset created successfully!"
+)
+
+print(
+    "Number of rows:",
+    len(df)
+)
+
+print(
+    df["landslide"]
+    .value_counts()
+    .sort_index()
+)
 
 
-# ---------------------------------------------------------
-# Input features
-# ---------------------------------------------------------
+# =========================================================
+# FEATURES
+# =========================================================
 
 X = df[
     [
@@ -127,58 +178,92 @@ X = df[
     ]
 ]
 
+
 # Target
 y = df["landslide"]
 
 
-# ---------------------------------------------------------
-# Train / Test split
-# ---------------------------------------------------------
+# =========================================================
+# TRAIN TEST SPLIT
+# =========================================================
 
 X_train, X_test, y_train, y_test = train_test_split(
+
     X,
     y,
+
     test_size=0.20,
+
     random_state=42,
+
     stratify=y
 )
 
-print()
-print("Training samples:", len(X_train))
-print("Testing samples:", len(X_test))
+
+print(
+    "Training samples:",
+    len(X_train)
+)
+
+print(
+    "Testing samples:",
+    len(X_test)
+)
 
 
-# ---------------------------------------------------------
-# Random Forest Model
-# ---------------------------------------------------------
+# =========================================================
+# RANDOM FOREST
+# =========================================================
 
 model = RandomForestClassifier(
+
     n_estimators=300,
+
     max_depth=12,
+
     min_samples_leaf=3,
+
     random_state=42,
+
     class_weight="balanced"
 )
 
-model.fit(X_train, y_train)
+
+# =========================================================
+# TRAIN
+# =========================================================
+
+model.fit(
+    X_train,
+    y_train
+)
 
 
-# ---------------------------------------------------------
-# Test model
-# ---------------------------------------------------------
+# =========================================================
+# TEST
+# =========================================================
 
-predictions = model.predict(X_test)
+predictions = model.predict(
+    X_test
+)
+
 
 accuracy = accuracy_score(
     y_test,
     predictions
 )
 
-print()
-print("Accuracy:", round(accuracy * 100, 2), "%")
 
-print()
-print("Classification Report:")
+print(
+    "Accuracy:",
+    round(
+        accuracy * 100,
+        2
+    ),
+    "%"
+)
+
+
 print(
     classification_report(
         y_test,
@@ -192,20 +277,24 @@ print(
 )
 
 
-# ---------------------------------------------------------
-# Save model
-# ---------------------------------------------------------
+# =========================================================
+# SAVE MODEL
+# =========================================================
 
 MODEL_PATH = "landslide_model.pkl"
+
 
 joblib.dump(
     model,
     MODEL_PATH
 )
 
-print()
-print("===================================")
-print("Model trained successfully!")
-print("Model saved as:", MODEL_PATH)
-print("===================================")
 
+print(
+    "Model trained successfully!"
+)
+
+print(
+    "Model saved as:",
+    MODEL_PATH
+)

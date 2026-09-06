@@ -22,6 +22,8 @@ import "./App.css";
 const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://geoguard-ai-backend.onrender.com";
+
+
 // ======================================================
 // 2. LEAFLET MARKER FIX
 // ======================================================
@@ -118,49 +120,78 @@ function MapClickHandler({ onLocationSelect }) {
 
 function RiskMap() {
 
-  // ----------------------------------------------------
+  // ====================================================
   // LOCATION
-  // ----------------------------------------------------
+  // ====================================================
 
-  const [selectedPoint, setSelectedPoint] =
-    useState(null);
+  const [
+    selectedPoint,
+    setSelectedPoint,
+  ] = useState(null);
 
-  const [locationName, setLocationName] =
-    useState("");
-
-
-  // ----------------------------------------------------
-  // SEARCH
-  // ----------------------------------------------------
-
-  const [searchText, setSearchText] =
-    useState("");
-
-  const [searchLoading, setSearchLoading] =
-    useState(false);
-
-
-  // ----------------------------------------------------
-  // RISK DATA
-  // ----------------------------------------------------
-
-  const [riskData, setRiskData] =
-    useState(null);
-
-  const [riskLoading, setRiskLoading] =
-    useState(false);
-
-
-  // ----------------------------------------------------
-  // ERROR
-  // ----------------------------------------------------
-
-  const [error, setError] =
-    useState("");
+  const [
+    locationName,
+    setLocationName,
+  ] = useState("");
 
 
   // ====================================================
-  // 7. GET RISK FROM BACKEND
+  // SEARCH
+  // ====================================================
+
+  const [
+    searchText,
+    setSearchText,
+  ] = useState("");
+
+  const [
+    searchLoading,
+    setSearchLoading,
+  ] = useState(false);
+
+
+  // ====================================================
+  // CURRENT RISK
+  // ====================================================
+
+  const [
+    riskData,
+    setRiskData,
+  ] = useState(null);
+
+  const [
+    riskLoading,
+    setRiskLoading,
+  ] = useState(false);
+
+
+  // ====================================================
+  // TOMORROW RISK
+  // ====================================================
+
+  const [
+    tomorrowData,
+    setTomorrowData,
+  ] = useState(null);
+
+  const [
+    tomorrowLoading,
+    setTomorrowLoading,
+  ] = useState(false);
+
+
+  // ====================================================
+  // ERROR
+  // ====================================================
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+
+  // ====================================================
+  // 7. CURRENT RISK PREDICTION
   // ====================================================
 
   const getRiskPrediction = async (
@@ -169,7 +200,6 @@ function RiskMap() {
   ) => {
 
     setRiskLoading(true);
-
     setRiskData(null);
 
     try {
@@ -180,8 +210,8 @@ function RiskMap() {
           method: "POST",
 
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
 
           body: JSON.stringify({
@@ -195,7 +225,7 @@ function RiskMap() {
       if (!response.ok) {
 
         let message =
-          "Unable to get landslide risk.";
+          "Unable to get current landslide risk.";
 
         try {
 
@@ -203,6 +233,7 @@ function RiskMap() {
             await response.json();
 
           if (errorData.detail) {
+
             message =
               typeof errorData.detail === "string"
                 ? errorData.detail
@@ -224,9 +255,14 @@ function RiskMap() {
 
 
       console.log(
-        "Risk prediction:",
+        "CURRENT PREDICTION:",
         data
       );
+
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
 
       setRiskData(data);
@@ -236,13 +272,13 @@ function RiskMap() {
     catch (err) {
 
       console.error(
-        "Risk prediction error:",
+        "Current risk error:",
         err
       );
 
       setError(
         err.message ||
-        "Unable to retrieve landslide risk."
+        "Unable to retrieve current landslide risk."
       );
 
     }
@@ -256,7 +292,130 @@ function RiskMap() {
 
 
   // ====================================================
-  // 8. SELECT LOCATION
+  // 8. TOMORROW PREDICTION
+  // ====================================================
+
+  const getTomorrowPrediction = async (
+    latitude,
+    longitude
+  ) => {
+
+    setTomorrowLoading(true);
+    setTomorrowData(null);
+
+    try {
+
+      console.log(
+        "Requesting tomorrow prediction..."
+      );
+
+      console.log(
+        "API URL:",
+        `${API_URL}/tomorrow-predict`
+      );
+
+
+      const response = await fetch(
+        `${API_URL}/tomorrow-predict`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+
+          body: JSON.stringify({
+            latitude: latitude,
+            longitude: longitude,
+          }),
+        }
+      );
+
+
+      console.log(
+        "Tomorrow response status:",
+        response.status
+      );
+
+
+      if (!response.ok) {
+
+        let message =
+          "Unable to get tomorrow's prediction.";
+
+        try {
+
+          const errorData =
+            await response.json();
+
+          console.error(
+            "Tomorrow backend error:",
+            errorData
+          );
+
+
+          if (errorData.detail) {
+
+            message =
+              typeof errorData.detail === "string"
+                ? errorData.detail
+                : JSON.stringify(
+                    errorData.detail
+                  );
+          }
+
+        } catch {
+          // Ignore JSON parsing error
+        }
+
+        throw new Error(message);
+      }
+
+
+      const data =
+        await response.json();
+
+
+      console.log(
+        "TOMORROW PREDICTION:",
+        data
+      );
+
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+
+      setTomorrowData(data);
+
+    }
+
+    catch (err) {
+
+      console.error(
+        "Tomorrow prediction error:",
+        err
+      );
+
+      setError(
+        err.message ||
+        "Unable to get tomorrow's prediction."
+      );
+
+    }
+
+    finally {
+
+      setTomorrowLoading(false);
+
+    }
+  };
+
+
+  // ====================================================
+  // 9. SELECT LOCATION
   // ====================================================
 
   const selectLocation = (
@@ -275,6 +434,8 @@ function RiskMap() {
       setLocationName("");
 
       setRiskData(null);
+
+      setTomorrowData(null);
 
       setError(
         "Please select a location within India."
@@ -295,9 +456,21 @@ function RiskMap() {
     setError("");
 
 
-    // IMPORTANT:
-    // Send location to backend
+    // --------------------------------------------------
+    // CURRENT PREDICTION
+    // --------------------------------------------------
+
     getRiskPrediction(
+      latitude,
+      longitude
+    );
+
+
+    // --------------------------------------------------
+    // TOMORROW PREDICTION
+    // --------------------------------------------------
+
+    getTomorrowPrediction(
       latitude,
       longitude
     );
@@ -305,7 +478,7 @@ function RiskMap() {
 
 
   // ====================================================
-  // 9. SEARCH LOCATION
+  // 10. SEARCH LOCATION
   // ====================================================
 
   const searchLocation = async (event) => {
@@ -332,6 +505,8 @@ function RiskMap() {
 
     setRiskData(null);
 
+    setTomorrowData(null);
+
     setSelectedPoint(null);
 
 
@@ -349,12 +524,15 @@ function RiskMap() {
 
 
       const response =
-        await fetch(url, {
-          headers: {
-            Accept:
-              "application/json",
-          },
-        });
+        await fetch(
+          url,
+          {
+            headers: {
+              Accept:
+                "application/json",
+            },
+          }
+        );
 
 
       if (!response.ok) {
@@ -408,10 +586,14 @@ function RiskMap() {
 
 
       const latitude =
-        Number(indianResult.lat);
+        Number(
+          indianResult.lat
+        );
 
       const longitude =
-        Number(indianResult.lon);
+        Number(
+          indianResult.lon
+        );
 
 
       if (
@@ -482,15 +664,16 @@ function RiskMap() {
       setSearchLoading(false);
 
     }
-
   };
 
 
   // ====================================================
-  // 10. RISK COLOR CLASS
+  // 11. RISK CLASS
   // ====================================================
 
-  const getRiskClass = (riskLevel) => {
+  const getRiskClass = (
+    riskLevel
+  ) => {
 
     if (!riskLevel) {
       return "";
@@ -498,49 +681,131 @@ function RiskMap() {
 
     return riskLevel
       .toLowerCase()
-      .replace(/\s+/g, "-");
-
+      .replace(
+        /\s+/g,
+        "-"
+      );
   };
 
 
   // ====================================================
-  // 11. UI
+  // 12. RISK LABEL
+  // ====================================================
+
+  const getRiskLabel = (
+    riskLevel
+  ) => {
+
+    if (
+      riskLevel === "High"
+    ) {
+
+      return "🔴 HIGH RISK";
+    }
+
+
+    if (
+      riskLevel === "Medium"
+    ) {
+
+      return "🟡 MEDIUM RISK";
+    }
+
+
+    return "🟢 LOW RISK";
+  };
+
+
+  // ====================================================
+  // 13. PROBABILITY
+  // ====================================================
+
+  const getProbability = (data) => {
+
+    if (!data) {
+      return 0;
+    }
+
+
+    if (
+      data.risk_percentage !==
+      undefined &&
+      data.risk_percentage !==
+      null
+    ) {
+
+      return Number(
+        data.risk_percentage
+      );
+    }
+
+
+    if (
+      data.landslide_probability !==
+      undefined &&
+      data.landslide_probability !==
+      null
+    ) {
+
+      const probability =
+        Number(
+          data.landslide_probability
+        );
+
+
+      // Backend may return 0-1
+      if (
+        probability >= 0 &&
+        probability <= 1
+      ) {
+
+        return probability * 100;
+      }
+
+
+      // Backend may return 0-100
+      return probability;
+    }
+
+
+    return 0;
+  };
+
+
+  // ====================================================
+  // 14. UI
   // ====================================================
 
   return (
 
-    <section className="page-section risk-map-page">
+    <section
+      className="page-section risk-map-page"
+    >
 
-
-      {/* ==============================================
+      {/* =================================================
           HEADER
-      ============================================== */}
+      ================================================= */}
 
       <span className="badge">
-
         🗺️ AI LANDSLIDE RISK MAP
-
       </span>
 
 
       <h1>
-
         Landslide Risk Map
-
       </h1>
 
 
       <p>
-
         Search any location in India or click
-        directly on the map to select a location.
-
+        directly on the map to analyze landslide
+        risk.
       </p>
 
 
-      {/* ==============================================
+      {/* =================================================
           SEARCH
-      ============================================== */}
+      ================================================= */}
 
       <div className="map-search-card">
 
@@ -592,9 +857,9 @@ function RiskMap() {
       </div>
 
 
-      {/* ==============================================
+      {/* =================================================
           INSTRUCTION
-      ============================================== */}
+      ================================================= */}
 
       <div className="map-instruction">
 
@@ -604,14 +869,14 @@ function RiskMap() {
           Search or click any location in India
         </strong>{" "}
 
-        to select the location on the map.
+        to select the location.
 
       </div>
 
 
-      {/* ==============================================
+      {/* =================================================
           MAP
-      ============================================== */}
+      ================================================= */}
 
       <div className="risk-map-container">
 
@@ -662,10 +927,8 @@ function RiskMap() {
               <Popup>
 
                 <strong>
-
                   {locationName ||
                     "Selected Location"}
-
                 </strong>
 
                 <br />
@@ -696,9 +959,9 @@ function RiskMap() {
       </div>
 
 
-      {/* ==============================================
+      {/* =================================================
           ERROR
-      ============================================== */}
+      ================================================= */}
 
       {error && (
 
@@ -711,9 +974,9 @@ function RiskMap() {
       )}
 
 
-      {/* ==============================================
+      {/* =================================================
           SELECTED LOCATION
-      ============================================== */}
+      ================================================= */}
 
       {selectedPoint && (
 
@@ -724,7 +987,7 @@ function RiskMap() {
             📍{" "}
 
             {locationName ||
-              "Selected Location"}
+              "Selected Map Location"}
 
           </h2>
 
@@ -763,10 +1026,16 @@ function RiskMap() {
 
             <small>
 
-              {riskLoading
+              {riskLoading ||
+              tomorrowLoading
+
                 ? "🤖 AI is analyzing the location..."
-                : riskData
+
+                : riskData ||
+                  tomorrowData
+
                 ? "✅ Risk analysis completed."
+
                 : "The location is ready for analysis."}
 
             </small>
@@ -778,24 +1047,22 @@ function RiskMap() {
       )}
 
 
-      {/* ==============================================
-          RISK LOADING
-      ============================================== */}
+      {/* =================================================
+          CURRENT RISK LOADING
+      ================================================= */}
 
       {riskLoading && (
 
         <div className="risk-result-card">
 
           <h2>
-
-            🤖 AI Landslide Risk Analysis
-
+            🤖 Current Landslide Risk
           </h2>
 
           <p>
 
             🔄 Retrieving environmental data
-            and calculating risk...
+            and calculating current risk...
 
           </p>
 
@@ -804,11 +1071,12 @@ function RiskMap() {
       )}
 
 
-      {/* ==============================================
-          FULL RISK RESULT
-      ============================================== */}
+      {/* =================================================
+          CURRENT RISK RESULT
+      ================================================= */}
 
-      {riskData && !riskLoading && (
+      {riskData &&
+      !riskLoading && (
 
         <div
           className={`risk-result-card ${getRiskClass(
@@ -817,56 +1085,43 @@ function RiskMap() {
         >
 
           <h2>
-
-            🤖 AI Landslide Risk Analysis
-
+            🤖 Current Landslide Risk
           </h2>
 
 
-          {/* RISK LEVEL */}
+          {/* CURRENT RISK LEVEL */}
 
           <div className="risk-level-box">
 
             <span>
-              Risk Level
+              Current Risk Level
             </span>
 
             <strong>
 
-              {riskData.risk_level ===
-                "High"
-                ? "🔴 HIGH RISK"
-                : riskData.risk_level ===
-                  "Medium"
-                ? "🟡 MEDIUM RISK"
-                : "🟢 LOW RISK"}
+              {getRiskLabel(
+                riskData.risk_level
+              )}
 
             </strong>
 
           </div>
 
 
-          {/* PROBABILITY */}
+          {/* CURRENT PROBABILITY */}
 
           <div className="risk-probability">
 
             <h3>
-
               Landslide Probability
-
             </h3>
 
             <div className="risk-percentage">
 
-              {Number(
-                riskData.risk_percentage ??
-                (
-                  Number(
-                    riskData.landslide_probability ||
-                    0
-                  ) * 100
-                )
+              {getProbability(
+                riskData
               ).toFixed(2)}
+
               %
 
             </div>
@@ -874,10 +1129,9 @@ function RiskMap() {
           </div>
 
 
-          {/* ENVIRONMENTAL DATA */}
+          {/* CURRENT ENVIRONMENTAL DATA */}
 
           <div className="risk-info-grid">
-
 
             <div className="risk-info-item">
 
@@ -887,7 +1141,8 @@ function RiskMap() {
 
               <strong>
 
-                {riskData.rainfall ?? "N/A"}
+                {riskData.rainfall ??
+                  "N/A"}
 
                 {riskData.rainfall !==
                   undefined &&
@@ -901,64 +1156,7 @@ function RiskMap() {
             <div className="risk-info-item">
 
               <span>
-                💧 Humidity
-              </span>
-
-              <strong>
-
-                {riskData.humidity ?? "N/A"}
-
-                {riskData.humidity !==
-                  undefined &&
-                  " %"}
-
-              </strong>
-
-            </div>
-
-
-            <div className="risk-info-item">
-
-              <span>
-                🌡️ Temperature
-              </span>
-
-              <strong>
-
-                {riskData.temperature ?? "N/A"}
-
-                {riskData.temperature !==
-                  undefined &&
-                  " °C"}
-
-              </strong>
-
-            </div>
-
-
-            <div className="risk-info-item">
-
-              <span>
-                💨 Wind Speed
-              </span>
-
-              <strong>
-
-                {riskData.wind_speed ?? "N/A"}
-
-                {riskData.wind_speed !==
-                  undefined &&
-                  " km/h"}
-
-              </strong>
-
-            </div>
-
-
-            <div className="risk-info-item">
-
-              <span>
-                🌱 Soil Moisture
+                💧 Soil Moisture
               </span>
 
               <strong>
@@ -979,7 +1177,8 @@ function RiskMap() {
 
               <strong>
 
-                {riskData.elevation ?? "N/A"}
+                {riskData.elevation ??
+                  "N/A"}
 
                 {riskData.elevation !==
                   undefined &&
@@ -998,7 +1197,8 @@ function RiskMap() {
 
               <strong>
 
-                {riskData.slope ?? "N/A"}
+                {riskData.slope ??
+                  "N/A"}
 
                 {riskData.slope !==
                   undefined &&
@@ -1007,7 +1207,6 @@ function RiskMap() {
               </strong>
 
             </div>
-
 
           </div>
 
@@ -1021,7 +1220,7 @@ function RiskMap() {
             <strong>
 
               {riskData.data_source ||
-                "Backend AI Analysis"}
+                "live"}
 
             </strong>
 
@@ -1041,20 +1240,222 @@ function RiskMap() {
       )}
 
 
-      {/* ==============================================
+      {/* =================================================
+          TOMORROW LOADING
+      ================================================= */}
+
+      {tomorrowLoading && (
+
+        <div className="risk-result-card tomorrow-card">
+
+          <h2>
+            🔮 Tomorrow's Landslide Prediction
+          </h2>
+
+          <p>
+
+            🌦️ Analyzing tomorrow's environmental
+            conditions...
+
+          </p>
+
+        </div>
+
+      )}
+
+
+      {/* =================================================
+          TOMORROW RESULT
+      ================================================= */}
+
+      {tomorrowData &&
+      !tomorrowLoading && (
+
+        <div
+          className={`risk-result-card tomorrow-card ${getRiskClass(
+            tomorrowData.risk_level
+          )}`}
+        >
+
+          <h2>
+            🔮 Tomorrow's Landslide Risk
+          </h2>
+
+
+          {/* TOMORROW RISK LEVEL */}
+
+          <div className="risk-level-box">
+
+            <span>
+              Tomorrow's Risk Level
+            </span>
+
+            <strong>
+
+              {getRiskLabel(
+                tomorrowData.risk_level
+              )}
+
+            </strong>
+
+          </div>
+
+
+          {/* TOMORROW PROBABILITY */}
+
+          <div className="risk-probability">
+
+            <h3>
+              Predicted Landslide Probability
+            </h3>
+
+            <div className="risk-percentage">
+
+              {getProbability(
+                tomorrowData
+              ).toFixed(2)}
+
+              %
+
+            </div>
+
+          </div>
+
+
+          {/* TOMORROW ENVIRONMENTAL DATA */}
+
+          <div className="risk-info-grid">
+
+            <div className="risk-info-item">
+
+              <span>
+                🌧️ Expected Rainfall
+              </span>
+
+              <strong>
+
+                {tomorrowData.rainfall ??
+                  "N/A"}
+
+                {tomorrowData.rainfall !==
+                  undefined &&
+                  " mm"}
+
+              </strong>
+
+            </div>
+
+
+            <div className="risk-info-item">
+
+              <span>
+                💧 Soil Moisture
+              </span>
+
+              <strong>
+
+                {tomorrowData.soil_moisture ??
+                  "N/A"}
+
+              </strong>
+
+            </div>
+
+
+            <div className="risk-info-item">
+
+              <span>
+                ⛰️ Elevation
+              </span>
+
+              <strong>
+
+                {tomorrowData.elevation ??
+                  "N/A"}
+
+                {tomorrowData.elevation !==
+                  undefined &&
+                  " m"}
+
+              </strong>
+
+            </div>
+
+
+            <div className="risk-info-item">
+
+              <span>
+                📐 Slope
+              </span>
+
+              <strong>
+
+                {tomorrowData.slope ??
+                  "N/A"}
+
+                {tomorrowData.slope !==
+                  undefined &&
+                  "°"}
+
+              </strong>
+
+            </div>
+
+          </div>
+
+
+          {/* TOMORROW SOURCE */}
+
+          <div className="risk-data-source">
+
+            🔮 Forecast:{" "}
+
+            <strong>
+              {tomorrowData.forecast ||
+                "Tomorrow"}
+            </strong>
+
+            {" | "}
+
+            Source:{" "}
+
+            <strong>
+
+              {tomorrowData.data_source ||
+                "prototype forecast"}
+
+            </strong>
+
+          </div>
+
+
+          {/* TOMORROW DISCLAIMER */}
+
+          <div className="risk-disclaimer">
+
+            ⚠️ Tomorrow's prediction is an
+            AI-based forecast for informational
+            purposes and should not be treated as
+            an official government warning.
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =================================================
           EMPTY STATE
-      ============================================== */}
+      ================================================= */}
 
       {!selectedPoint && (
 
         <div className="map-empty-state">
 
           <h2>
-
             📍 Select a Location
-
           </h2>
-
 
           <p>
 
@@ -1069,7 +1470,6 @@ function RiskMap() {
       )}
 
     </section>
-
   );
 }
 
